@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music Video Factory</title>
+<style>
+body{margin:0;background:#0b1020;color:white;font-family:Arial,sans-serif;padding:20px}
+main{max-width:700px;margin:auto}
+h1{color:#b9adff}
+section{background:#171f36;padding:18px;border-radius:16px;margin:15px 0}
+label{display:block;margin:15px 0 8px}
+input,select,button{width:100%;padding:13px;margin:5px 0;border-radius:10px;box-sizing:border-box}
+button{background:#a99aff;border:0;font-weight:bold}
+canvas{width:100%;border-radius:12px;background:#111}
+</style>
+</head>
+<body>
+<main>
+<h1>♫ Music Video Factory</h1>
+<p>Әніңді таңда да, музыкалық видео жаса!</p>
+<section>
+<label>YouTube арнасы</label>
+<select id="channel"><option>Jürek Story</option><option>QazaqKidsMusic</option></select>
+<label>Ән атауы</label>
+<input id="title" placeholder="Ән атауын жаз">
+<label>Ән файлы</label>
+<input id="audioFile" type="file" accept="audio/*">
+<label>Фон суреті</label>
+<input id="imageFile" type="file" accept="image/*">
+</section>
+<section>
+<canvas id="canvas" width="1280" height="720"></canvas>
+<audio id="audio" controls style="width:100%"></audio>
+<button id="play">▶ Әнді ойнату</button>
+<button id="record">● Видео жазу</button>
+<button id="stop" disabled>■ Жазуды тоқтату</button>
+<p id="status">Алдымен ән мен суретті таңда.</p>
+<div id="download"></div>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const c=$('canvas'),x=c.getContext('2d'),a=$('audio');
+let bg=null,ac,analyser,source,dest,rec,chunks=[];
+$('audioFile').onchange=e=>{
+ const f=e.target.files[0];if(f)a.src=URL.createObjectURL(f);
+};
+$('imageFile').onchange=e=>{
+ const f=e.target.files[0];if(!f)return;
+ const im=new Image();im.onload=()=>bg=im;im.src=URL.createObjectURL(f);
+};
+function draw(){
+ const w=c.width,h=c.height;
+ x.fillStyle='#111a35';x.fillRect(0,0,w,h);
+ if(bg)x.drawImage(bg,0,0,w,h);
+ x.fillStyle='rgba(0,0,0,.4)';x.fillRect(0,0,w,h);
+ x.textAlign='center';x.fillStyle='white';
+ x.font='bold 48px Arial';x.fillText($('title').value||'Музыка',w/2,170);
+ x.font='26px Arial';x.fillText($('channel').value,w/2,220);
+ for(let i=0;i<80;i++){
+  let v=15+Math.abs(Math.sin(Date.now()/250+i*.5))*90;
+  if(analyser&& !a.paused){
+   const data=new Uint8Array(analyser.frequencyBinCount);
+   analyser.getByteFrequencyData(data);v=10+(data[i*3]||0)*.6;
+  }
+  x.fillStyle=i%2?'#8f8aff':'#5eead4';
+  x.fillRect(120+i*13,400-v/2,7,v);
+ }
+ requestAnimationFrame(draw);
+}
+function setup(){
+ if(ac)return;
+ ac=new(window.AudioContext||window.webkitAudioContext)();
+ analyser=ac.createAnalyser();analyser.fftSize=256;
+ source=ac.createMediaElementSource(a);dest=ac.createMediaStreamDestination();
+ source.connect(analyser);analyser.connect(ac.destination);analyser.connect(dest);
+}
+$('play').onclick=async()=>{
+ if(!a.src){$('status').textContent='Алдымен ән таңда.';return}
+ setup();await ac.resume();a.play();
+};
+$('record').onclick=async()=>{
+ if(!a.src){$('status').textContent='Алдымен ән таңда.';return}
+ try{
+ setup();await ac.resume();
+ const stream=new MediaStream([...c.captureStream(30).getVideoTracks(),...dest.stream.getAudioTracks()]);
+ rec=new MediaRecorder(stream);chunks=[];
+ rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+ rec.onstop=()=>{
+ const blob=new Blob(chunks,{type:rec.mimeType||'video/webm'});
+ const url=URL.createObjectURL(blob);
+ $('download').innerHTML='';
+ const link=document.createElement('a');link.href=url;link.download='music-video.webm';
+ link.textContent='Дайын видеоны жүктеу';link.style.color='#9ff';
+ $('download').appendChild(link);
+ $('status').textContent='Видео дайын!';
+ };
+ rec.start();a.currentTime=0;await a.play();
+ $('record').disabled=true;$('stop').disabled=false;
+ $('status').textContent='Видео жазылып жатыр...';
+ }catch(e){$('status').textContent='Бұл браузер видео жазуды қолдамауы мүмкін.'}
+};
+$('stop').onclick=()=>{if(rec&&rec.state==='recording')rec.stop();a.pause();$('record').disabled=false;$('stop').disabled=true};
+draw();
+</script>
+</body>
+</html>
